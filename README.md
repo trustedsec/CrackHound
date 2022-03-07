@@ -1,7 +1,7 @@
 ## CrackHound - introduce plain text passwords to da hound.
 
 This tool has a corresponding blogpost which can be found here:
-<link>
+**blogpost coming tomorrow, you early bird!**
 
 CrackHound is a way to introduce plain-text passwords into BloodHound. 
 This allows you to upload all your cracked hashes to the Neo4j database and use it for reporting purposes (csv exports) or path finding in BloodHound using custom queries.
