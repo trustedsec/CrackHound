@@ -53,7 +53,6 @@ def parse_compromised_users(file, type):
                     compromised_user = line
                 user_dict["username"] = compromised_user
                 compromised_users.append(user_dict)
-
             elif type.upper() == "NTDS":
                 if ":" in line:
                     split = line.split(":")
