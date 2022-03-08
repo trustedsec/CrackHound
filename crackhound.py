@@ -1,6 +1,7 @@
 import argparse
 import os
 import neo4j
+import string
 
 
 def banner():
@@ -35,7 +36,7 @@ MMMMMMMMMMMMMMMMMMMMMMMMMMMWXKKXKKKKKNWMMMMMMMMMMMMMMMMMMMMMMMMMMMMMWXXXXXXXXXXW
     """)
 
 
-def parse_compromised_users(file):
+def parse_compromised_users(file, type):
     compromised_users = []
     if os.path.exists(file):
         f = open(file, 'r')
@@ -43,20 +44,33 @@ def parse_compromised_users(file):
         for line in lines:
             user_dict = {}
             line = line.strip()
-            if ":" in line:
-                split = line.split(":")
-                compromised_user = split[0]
-                user_dict["password"] = split[2]
-            else:
-                compromised_user = line
-            user_dict["username"] = compromised_user
-            compromised_users.append(user_dict)
+            if type == "plaintext":
+                if ":" in line:
+                    split = line.split(":")
+                    compromised_user = split[0]
+                    user_dict["password"] = split[2]
+                else:
+                    compromised_user = line
+                user_dict["username"] = compromised_user
+                compromised_users.append(user_dict)
+
+            elif type.upper() == "NTDS":
+                if ":" in line:
+                    split = line.split(":")
+                    compromised_user = split[0]
+                    user_dict["NT"] = split[3]
+                else:
+                    compromised_user = line
+                user_dict["username"] = compromised_user
+                compromised_users.append(user_dict)
+
+
         return compromised_users
     else:
         raise Exception("{0} is not a valid file!", file)
 
 
-def format_compromised_users(compromised_users, domain):
+def format_compromised_users(compromised_users, domain, type):
     for user in compromised_users:
         user["username"] = user["username"].upper()
         if "\\" in user["username"]:
@@ -70,7 +84,7 @@ def format_compromised_users(compromised_users, domain):
     return compromised_users
 
 
-def update_database(compromised_users, url, username, password, plaintext, verbose, add_password):
+def update_database(compromised_users, url, username, password, plaintext, verbose, add_password, type):
     try:
         print("connecting to neo4j on {} with username {} and password {} ".format(url, username, password))
         db_conn = neo4j.GraphDatabase.driver(url, auth=(username, password), encrypted=False)
@@ -78,24 +92,30 @@ def update_database(compromised_users, url, username, password, plaintext, verbo
         for user in compromised_users:
             try:
                 with db_conn.session() as session:
-                    if not plaintext:
-                        tx = session.run("match (u:User) where u.name=\"{0}\" set u.owned=True return u.name".format(
-                            user["username"]))
+                    if type.upper() == "NTDS":
+                        tx = session.run("match (u:User) where u.name=\"{0}\" set u.nthash=\"{1}\"".format(
+                                user["username"], user["NT"]))
                         if verbose:
-                            print("{0} successfully marked as owned!".format(tx.single()[0]))
-                    elif add_password:
-                        if user["password"]:
-                            tx = session.run("match (u:User) where u.name=\"{0}\" set u.plaintextpassword=\"{1}\"".format(
-                                user["username"], user["password"]))
+                            print("added NT hash of {0} and marked as owned.".format(user["username"]))
+                    elif type == "plaintext":
+                        if not plaintext:
+                            tx = session.run("match (u:User) where u.name=\"{0}\" set u.owned=True return u.name".format(
+                                user["username"]))
                             if verbose:
-                                print("added plaintext password of {0} and marked as owned.".format(user["username"]))
+                                print("{0} successfully marked as owned!".format(tx.single()[0]))
+                        elif add_password:
+                            if user["password"]:
+                                tx = session.run("match (u:User) where u.name=\"{0}\" set u.plaintextpassword=\"{1}\"".format(
+                                    user["username"], user["password"]))
+                                if verbose:
+                                    print("added plaintext password of {0} and marked as owned.".format(user["username"]))
+                            else:
+                                continue
                         else:
-                            continue
-                    else:
-                        tx = session.run(
-                            "match (u:User) where u.name=\"{0}\" set u.owned=True set u.plaintext=True return u.name".format(user["username"]))
-                        if verbose:
-                            print("{0} successfully marked as owned and marked as plaintext!".format(tx.single()[0]))
+                            tx = session.run(
+                                "match (u:User) where u.name=\"{0}\" set u.owned=True set u.plaintext=True return u.name".format(user["username"]))
+                            if verbose:
+                                print("{0} successfully marked as owned and marked as plaintext!".format(tx.single()[0]))
             except Exception as e:
                 print(e)
                 # print("{0} could not be updated, are you sure this user is in the database?".format(user))
@@ -110,6 +130,7 @@ def main():
     banner()
     parser = argparse.ArgumentParser(description="update bloodhound database with pwned users")
     parser.add_argument('-f', '--file', required=True, help="file with list of all users you have compromised")
+    parser.add_argument('-t', '--type', required=False, help="File with [plaintext] or [NTDS]", default="plaintext")
     parser.add_argument('-url', '--url', required=False,
                         help="the neo4j url to auth to (defaults to bolt://localhost:7687)",
                         default="bolt://localhost:7687")
@@ -125,10 +146,10 @@ def main():
     parser.add_argument('-v', '--verbose', required=False, default=False, help="verbose", action="store_true")
     parser.add_argument('-d', '--domain', '-fqdn', required=False , default="", help="the domain name of client in case its different than netbiosname")
     args = parser.parse_args()
-    compromised_users = parse_compromised_users(args.file)
-    compromised_users = format_compromised_users(compromised_users, args.domain)
+    compromised_users = parse_compromised_users(args.file, args.type)
+    compromised_users = format_compromised_users(compromised_users, args.domain, args.type)
     print("updating database, could take a while...")
-    update_database(compromised_users, args.url, args.username, args.password, args.plain_text, args.verbose, args.add_password)
+    update_database(compromised_users, args.url, args.username, args.password, args.plain_text, args.verbose, args.add_password, args.type)
     print("all done!")
 
 
