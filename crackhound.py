@@ -109,7 +109,7 @@ def update_database(compromised_users, url, username, password, plaintext, verbo
 def main():
     banner()
     parser = argparse.ArgumentParser(description="update bloodhound database with pwned users")
-    parser.add_argument('-f', '--file', required=False, help="file with list of all users you have compromised")
+    parser.add_argument('-f', '--file', required=True, help="file with list of all users you have compromised")
     parser.add_argument('-url', '--url', required=False,
                         help="the neo4j url to auth to (defaults to bolt://localhost:7687)",
                         default="bolt://localhost:7687")
