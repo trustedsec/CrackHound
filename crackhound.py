@@ -30,15 +30,24 @@ MMMMMMMMMMMMMMMMMMMMMMMMX:       ...;0MMMMMMMMMMMMMW0doloxKWMMMMMMNo.       .:KM
 MMMMMMMMMMMMMMMMMMMMMMMMWKc.   .'.',.;0MMMMMMMMMMMMMMMMMMMMMMMMMMMXc          ;0MMMMMXo,.',,;::::::;,.;KNk,  ....,:;,;'....kMMMMMMMMMMMMMMMMMMMMMMMMMM
 MMMMMMMMMMMMMMMMMMMMMMMMMMXl....'..'.,kWMMMMMMMMMMMMMMMMMMMMMMMMMMMXl.........'dWMMMM0:.',,,,,,,,,,'':OWXc..,,;;,;,,;,':O00NMMMMMMMMMMMMMMMMMMMMMMMMMM
 MMMMMMMMMMMMMMMMMMMMMMMMMMMWXKKXKKKKKNWMMMMMMMMMMMMMMMMMMMMMMMMMMMMMWXXXXXXXXXXWMMMMMMNXXXXXXXXXXXXXXWMMMNXXXXXXXXXXXXXWMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
-
                                                             CRACKHOUND - jfmaes
     """)
 
 
 def parse_compromised_users(file):
     compromised_users = []
-    if os.path.exists(file):
-        f = open(file, 'r')
+
+    # Trying to open file specified on command line
+    try:
+        os.path.exists(file)
+        f = open(file, "r")
+
+    # If file doesn't exist, exit with exception
+    except Exception as a:
+        print(f"{file} is not valid or doesn't exist!")
+        exit()
+
+    else:
         lines = f.readlines()
         for line in lines:
             user_dict = {}
@@ -52,15 +61,13 @@ def parse_compromised_users(file):
             user_dict["username"] = compromised_user
             compromised_users.append(user_dict)
         return compromised_users
-    else:
-        raise Exception("{0} is not a valid file!", file)
 
 
 def format_compromised_users(compromised_users, domain):
     for user in compromised_users:
         user["username"] = user["username"].upper()
         if "\\" in user["username"]:
-            split = user["username"].split('\\')
+            split = user["username"].split("\\")
             if domain:
                 user["username"] = split[1] + "@" + domain
             else:
@@ -70,66 +77,183 @@ def format_compromised_users(compromised_users, domain):
     return compromised_users
 
 
-def update_database(compromised_users, url, username, password, plaintext, verbose, add_password):
+def update_database(
+    compromised_users, url, username, password, plaintext, verbose, add_password
+):
     try:
-        print("connecting to neo4j on {} with username {} and password {} ".format(url, username, password))
-        db_conn = neo4j.GraphDatabase.driver(url, auth=(username, password), encrypted=False)
-        print("connection success!")
+        print(
+            "Connecting to neo4j on {} with username {} and password {} ".format(
+                url, username, password
+            )
+        )
+
+        try:
+            db_conn = neo4j.GraphDatabase.driver(
+                url, auth=(username, password), encrypted=False
+            )
+        except Exception:
+            print("Couldn't connect to database.")
+        else:
+            print("Connection success!")
+
         for user in compromised_users:
             try:
                 with db_conn.session() as session:
+
+                    # If plaintext not specified, simply mark user as owned in BH
                     if not plaintext:
-                        tx = session.run("match (u:User) where u.name=\"{0}\" set u.owned=True return u.name".format(
-                            user["username"]))
+                        tx = session.run(
+                            'match (u:User) where u.name="{0}" set u.owned=True return u.name'.format(
+                                user["username"]
+                            )
+                        )
                         if verbose:
-                            print("{0} successfully marked as owned!".format(tx.single()[0]))
+                            print(
+                                "{0} successfully marked as owned!".format(
+                                    tx.single()[0]
+                                )
+                            )
+
+                    # If add_password specified do the following
+                    # Give you user plaintextpassword attribute and set it to known user password
+                    # Set user to owned and set plaintext attribute to True
+                    # Assuming we want all three here when specifying add_password
                     elif add_password:
                         if user["password"]:
-                            tx = session.run("match (u:User) where u.name=\"{0}\" set u.plaintextpassword=\"{1}\"".format(
-                                user["username"], user["password"]))
+                            tx = session.run(
+                                'match (u:User) where u.name="{0}" set u.plaintextpassword="{1}"'.format(
+                                    user["username"], user["password"]
+                                )
+                            )
+                            tx = session.run(
+                                'match (u:User) where u.name="{0}" set u.owned=True set u.plaintext=True return u.name'.format(
+                                    user["username"]
+                                )
+                            )
                             if verbose:
-                                print("added plaintext password of {0} and marked as owned.".format(user["username"]))
+                                print(
+                                    "Added plaintext password for {0} marked as owned, and marked plaintext as True.".format(
+                                        user["username"]
+                                    )
+                                )
                         else:
                             continue
+
+                    # If nothing specified, set the user to owned and say we know the plaintext password by setting plaintext=True
                     else:
                         tx = session.run(
-                            "match (u:User) where u.name=\"{0}\" set u.owned=True set u.plaintext=True return u.name".format(user["username"]))
+                            'match (u:User) where u.name="{0}" set u.owned=True set u.plaintext=True return u.name'.format(
+                                user["username"]
+                            )
+                        )
                         if verbose:
-                            print("{0} successfully marked as owned and marked as plaintext!".format(tx.single()[0]))
+                            print(
+                                "{0} successfully marked as owned and marked as plaintext!".format(
+                                    tx.single()[0]
+                                )
+                            )
             except Exception as e:
                 print(e)
-                # print("{0} could not be updated, are you sure this user is in the database?".format(user))
                 continue
                 session.close()
+
     except Exception as e:
-        print("an error occured")
-        print(e)
+        print(f"An error occured {e}")
 
 
 def main():
-    banner()
-    parser = argparse.ArgumentParser(description="update bloodhound database with pwned users")
-    parser.add_argument('-f', '--file', required=True, help="file with list of all users you have compromised")
-    parser.add_argument('-url', '--url', required=False,
-                        help="the neo4j url to auth to (defaults to bolt://localhost:7687)",
-                        default="bolt://localhost:7687")
-    parser.add_argument('-u', '--username', required=False, help="username to login to neo4j (defaults to neo4j)",
-                        default="neo4j")
-    parser.add_argument('-p', '--password', required=False, help="password to login to neo4j (defaults to bloodhound)",
-                        default="bloodhound")
-    parser.add_argument('-plaintext', '--plain-text', required=False,
-                        help="adds plaintext property to compromised user to help with custom queries", default=False,
-                        action="store_true")
-    parser.add_argument('-addpw', "--add-password", action="store_true",required=False,default=False,
-                        help="adds the actual plain text password to the bloodhound data as well")
-    parser.add_argument('-v', '--verbose', required=False, default=False, help="verbose", action="store_true")
-    parser.add_argument('-d', '--domain', '-fqdn', required=False , default="", help="the domain name of client in case its different than netbiosname")
+    parser = argparse.ArgumentParser(
+        description="Update bloodhound database with pwned users"
+    )
+    parser.add_argument(
+        "-f",
+        "--file",
+        required=True,
+        help="File with list of all users you have compromised. Supports DOMAIN.COM\\USER:NTHASH:PASS or DOMAIN.COM\\USER",
+    )
+    parser.add_argument(
+        "-url",
+        "--url",
+        required=False,
+        help="The neo4j url to auth to (defaults to bolt://localhost:7687)",
+        default="bolt://localhost:7687",
+    )
+    parser.add_argument(
+        "-u",
+        "--username",
+        required=False,
+        help="Username to login to neo4j (defaults to neo4j)",
+        default="neo4j",
+    )
+    parser.add_argument(
+        "-p",
+        "--password",
+        required=False,
+        help="Password to login to neo4j (defaults to bloodhound)",
+        default="bloodhound",
+    )
+    parser.add_argument(
+        "-plaintext",
+        "--plain-text",
+        required=False,
+        help="Adds plaintext property to compromised user to help with custom queries",
+        default=False,
+        action="store_true",
+    )
+    parser.add_argument(
+        "-addpw",
+        "--add-password",
+        action="store_true",
+        required=False,
+        default=False,
+        help="Adds the actual plain text password to the bloodhound data as well",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        required=False,
+        default=False,
+        help="verbose",
+        action="store_true",
+    )
+    parser.add_argument(
+        "-d",
+        "--domain",
+        "-fqdn",
+        required=False,
+        default="",
+        help="The domain name of client in case its different than netbiosname. It very likely will be different. Check your secretsdump for more info.",
+    )
+    parser.add_argument(
+        "-s",
+        "--silent",
+        required=False,
+        action="store_true",
+        help="Don't show ascii art ;)",
+    )
     args = parser.parse_args()
+
+    if args.silent:
+        pass
+    else:
+        banner()
+
     compromised_users = parse_compromised_users(args.file)
     compromised_users = format_compromised_users(compromised_users, args.domain)
-    print("updating database, could take a while...")
-    update_database(compromised_users, args.url, args.username, args.password, args.plain_text, args.verbose, args.add_password)
-    print("all done!")
+
+    print("Updating database, could take a while...")
+
+    update_database(
+        compromised_users,
+        args.url,
+        args.username,
+        args.password,
+        args.plain_text,
+        args.verbose,
+        args.add_password,
+    )
+
+    print("All Done!")
 
 
 if __name__ == "__main__":

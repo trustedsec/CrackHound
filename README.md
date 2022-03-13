@@ -39,25 +39,26 @@ MMMMMMMMMMMMMMMMMMMMMMMMMMXl....'..'.,kWMMMMMMMMMMMMMMMMMMMMMMMMMMMXl.........'d
 MMMMMMMMMMMMMMMMMMMMMMMMMMMWXKKXKKKKKNWMMMMMMMMMMMMMMMMMMMMMMMMMMMMMWXXXXXXXXXXWMMMMMMNXXXXXXXXXXXXXXWMMMNXXXXXXXXXXXXXWMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
 
                                                             CRACKHOUND - jfmaes
-    
-usage: crackhound.py [-h] [-f FILE] [-url URL] [-u USERNAME] [-p PASSWORD] [-plaintext] [-addpw] [-v] [-d DOMAIN]
+usage: crackhound.py [-h] -f FILE [-url URL] [-u USERNAME] [-p PASSWORD] [-plaintext] [-addpw] [-v] [-d DOMAIN] [-s]
 
-update bloodhound database with pwned users
+Update bloodhound database with pwned users
 
 optional arguments:
   -h, --help            show this help message and exit
-  -f FILE, --file FILE  file with list of all users you have compromised
-  -url URL, --url URL   the neo4j url to auth to (defaults to bolt://localhost:7687)
+  -f FILE, --file FILE  File with list of all users you have compromised. Supports DOMAIN.COM\USER:NTHASH:PASS or DOMAIN.COM\USER
+  -url URL, --url URL   The neo4j url to auth to (defaults to bolt://localhost:7687)
   -u USERNAME, --username USERNAME
-                        username to login to neo4j (defaults to neo4j)
+                        Username to login to neo4j (defaults to neo4j)
   -p PASSWORD, --password PASSWORD
-                        password to login to neo4j (defaults to bloodhound)
+                        Password to login to neo4j (defaults to bloodhound)
   -plaintext, --plain-text
-                        adds plaintext property to compromised user to help with custom queries
+                        Adds plaintext property to compromised user to help with custom queries
   -addpw, --add-password
-                        adds the actual plain text password to the bloodhound data as well
+                        Adds the actual plain text password to the bloodhound data as well
   -v, --verbose         verbose
   -d DOMAIN, --domain DOMAIN, -fqdn DOMAIN
-                        the domain name of client in case its different than netbiosname
+                        The domain name of client in case its different than netbiosname. It very likely will be different. Check your
+                        secretsdump for more info.
+  -s, --silent          Don't show ascii art   
                                                                                                                                                                  
 ```
