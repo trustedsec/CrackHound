@@ -153,12 +153,12 @@ def update_database(compromised_users, url, username, password, plaintext, verbo
                             else:
                                 continue
                         else:
-                           tx = session.run(
+                            tx = session.run(
                                 "match (u:User) where u.name=\"{0}\" set u.owned=True set u.plaintext=True return u.name".format(
                                     user["username"]
                                 )
                             )
-                           if verbose:
+                            if verbose:
                                 print("{0} successfully marked as owned and marked as plaintext!".format(
                                 tx.single()[0]
                                 )
