@@ -267,7 +267,7 @@ def main():
         args.plain_text,
         args.verbose,
         args.add_password,
-        args.type
+        args.type,
     )
 
     print("All Done!")
