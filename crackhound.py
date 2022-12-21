@@ -3,6 +3,7 @@
 import argparse
 import os
 import neo4j
+import string
 
 
 def banner():
@@ -36,7 +37,7 @@ MMMMMMMMMMMMMMMMMMMMMMMMMMMWXKKXKKKKKNWMMMMMMMMMMMMMMMMMMMMMMMMMMMMMWXXXXXXXXXXW
     """)
 
 
-def parse_compromised_users(file):
+def parse_compromised_users(file, type):
     compromised_users = []
 
     # Trying to open file specified on command line
@@ -54,18 +55,29 @@ def parse_compromised_users(file):
         for line in lines:
             user_dict = {}
             line = line.strip()
-            if ":" in line:
-                split = line.split(":")
-                compromised_user = split[0]
-                user_dict["password"] = split[2]
-            else:
-                compromised_user = line
-            user_dict["username"] = compromised_user
-            compromised_users.append(user_dict)
+            if type == "plaintext":
+                if ":" in line:
+                    split = line.split(":")
+                    compromised_user = split[0]
+                    user_dict["password"] = split[2]
+                else:
+                    compromised_user = line
+                    user_dict["username"] = compromised_user
+                    compromised_users.append(user_dict)
+
+            elif type.upper() == "NTDS":
+                if ":" in line:
+                    split = line.split(":")
+                    compromised_user = split[0]
+                    user_dict["NT"] = split[3]
+                else:
+                    compromised_user = line
+                    user_dict["username"] = compromised_user
+                    compromised_users.append(user_dict)
         return compromised_users
 
 
-def format_compromised_users(compromised_users, domain):
+def format_compromised_users(compromised_users, domain, type):
     for user in compromised_users:
         user["username"] = user["username"].upper()
         if "\\" in user["username"]:
@@ -79,9 +91,7 @@ def format_compromised_users(compromised_users, domain):
     return compromised_users
 
 
-def update_database(
-    compromised_users, url, username, password, plaintext, verbose, add_password
-):
+def update_database(compromised_users, url, username, password, plaintext, verbose, add_password, type):
     try:
         print(
             "Connecting to neo4j on {} with username {} and password {} ".format(
@@ -103,28 +113,21 @@ def update_database(
                 with db_conn.session() as session:
 
                     # If plaintext not specified, simply mark user as owned in BH
-                    if not plaintext:
-                        tx = session.run(
-                            'match (u:User) where u.name="{0}" set u.owned=True return u.name'.format(
-                                user["username"]
+                    if type.upper() == "NTDS":
+                        tx = session.run('match (u:User) where u.name="{0}" set u.nthash="{1}"'.format(
+                                user["username"], user["NT"]
                             )
                         )
                         if verbose:
-                            print(
-                                "{0} successfully marked as owned!".format(
-                                    tx.single()[0]
-                                )
+                            print("added NT hash of {0} and marked as owned.".format(
+                                user["username"]
                             )
-
-                    # If add_password specified do the following
-                    # Give you user plaintextpassword attribute and set it to known user password
-                    # Set user to owned and set plaintext attribute to True
-                    # Assuming we want all three here when specifying add_password
-                    elif add_password:
-                        if user["password"]:
+                        )
+                    elif type == "plaintext":
+                        if not plaintext:
                             tx = session.run(
-                                'match (u:User) where u.name="{0}" set u.plaintextpassword="{1}"'.format(
-                                    user["username"], user["password"]
+                                'match (u:User) where u.name="{0}" set u.owned=True return u.name'.format(
+                                    user["username"]
                                 )
                             )
                             tx = session.run(
@@ -133,24 +136,31 @@ def update_database(
                                 )
                             )
                             if verbose:
-                                print(
-                                    "Added plaintext password for {0} marked as owned, and marked plaintext as True.".format(
+                                print("{0} successfully marked as owned!".format(
+                                    tx.single()[0]
+                                )
+                            )
+                        elif add_password:
+                            if user["password"]:
+                                tx = session.run("match (u:User) where u.name=\"{0}\" set u.plaintextpassword=\"{1}\"".format(
+                                    user["username"], user["password"]
+                                    )
+                                )
+                                if verbose:
+                                    print("added plaintext password of {0} and marked as owned.".format(
                                         user["username"]
                                     )
                                 )
+                            else:
+                                continue
                         else:
-                            continue
-
-                    # If nothing specified, set the user to owned and say we know the plaintext password by setting plaintext=True
-                    else:
-                        tx = session.run(
-                            'match (u:User) where u.name="{0}" set u.owned=True set u.plaintext=True return u.name'.format(
-                                user["username"]
+                           tx = session.run(
+                                "match (u:User) where u.name=\"{0}\" set u.owned=True set u.plaintext=True return u.name".format(
+                                    user["username"]
+                                )
                             )
-                        )
-                        if verbose:
-                            print(
-                                "{0} successfully marked as owned and marked as plaintext!".format(
+                           if verbose:
+                                print("{0} successfully marked as owned and marked as plaintext!".format(
                                     tx.single()[0]
                                 )
                             )
@@ -162,7 +172,6 @@ def update_database(
     except Exception as e:
         print(f"An error occured {e}")
 
-
 def main():
     parser = argparse.ArgumentParser(
         description="Update bloodhound database with pwned users"
@@ -172,6 +181,13 @@ def main():
         "--file",
         required=True,
         help="File with list of all users you have compromised. Supports DOMAIN.COM\\USER:NTHASH:PASS or DOMAIN.COM\\USER",
+    )
+    parser.add_argument(
+        '-t',
+        '--type',
+        required=False,
+        help="File with [plaintext] or [NTDS]",
+        default="plaintext"
     )
     parser.add_argument(
         "-url",
@@ -240,8 +256,8 @@ def main():
     else:
         banner()
 
-    compromised_users = parse_compromised_users(args.file)
-    compromised_users = format_compromised_users(compromised_users, args.domain)
+    compromised_users = parse_compromised_users(args.file, args.type)
+    compromised_users = format_compromised_users(compromised_users, args.domain, args.type)
 
     print("Updating database, could take a while...")
 
@@ -253,6 +269,7 @@ def main():
         args.plain_text,
         args.verbose,
         args.add_password,
+        args.type,
     )
 
     print("All Done!")
