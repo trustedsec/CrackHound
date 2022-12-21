@@ -2,8 +2,8 @@
 
 import argparse
 import os
-import neo4j
 import string
+import neo4j
 
 
 def banner():
@@ -62,8 +62,8 @@ def parse_compromised_users(file, type):
                     user_dict["password"] = split[2]
                 else:
                     compromised_user = line
-                    user_dict["username"] = compromised_user
-                    compromised_users.append(user_dict)
+                user_dict["username"] = compromised_user
+                compromised_users.append(user_dict)
 
             elif type.upper() == "NTDS":
                 if ":" in line:
@@ -72,8 +72,8 @@ def parse_compromised_users(file, type):
                     user_dict["NT"] = split[3]
                 else:
                     compromised_user = line
-                    user_dict["username"] = compromised_user
-                    compromised_users.append(user_dict)
+                user_dict["username"] = compromised_user
+                compromised_users.append(user_dict)
         return compromised_users
 
 
@@ -114,20 +114,19 @@ def update_database(compromised_users, url, username, password, plaintext, verbo
 
                     # If plaintext not specified, simply mark user as owned in BH
                     if type.upper() == "NTDS":
-                        tx = session.run('match (u:User) where u.name="{0}" set u.nthash="{1}"'.format(
+                        tx = session.run("match (u:User) where u.name=\"{0}\" set u.nthash=\"{1}\"".format(
                                 user["username"], user["NT"]
                             )
                         )
                         if verbose:
                             print("added NT hash of {0} and marked as owned.".format(
-                                user["username"]
+                               user["username"]
+                               )
                             )
-                        )
                     elif type == "plaintext":
                         if not plaintext:
-                            tx = session.run(
-                                'match (u:User) where u.name="{0}" set u.owned=True return u.name'.format(
-                                    user["username"]
+                            tx = session.run("match (u:User) where u.name=\"{0}\" set u.owned=True return u.name".format(
+                                user["username"]
                                 )
                             )
                             tx = session.run(
@@ -137,9 +136,9 @@ def update_database(compromised_users, url, username, password, plaintext, verbo
                             )
                             if verbose:
                                 print("{0} successfully marked as owned!".format(
-                                    tx.single()[0]
+                                   tx.single()[0]
+                                   )
                                 )
-                            )
                         elif add_password:
                             if user["password"]:
                                 tx = session.run("match (u:User) where u.name=\"{0}\" set u.plaintextpassword=\"{1}\"".format(
@@ -148,9 +147,9 @@ def update_database(compromised_users, url, username, password, plaintext, verbo
                                 )
                                 if verbose:
                                     print("added plaintext password of {0} and marked as owned.".format(
-                                        user["username"]
+                                       user["username"]
+                                       )
                                     )
-                                )
                             else:
                                 continue
                         else:
@@ -161,7 +160,7 @@ def update_database(compromised_users, url, username, password, plaintext, verbo
                             )
                            if verbose:
                                 print("{0} successfully marked as owned and marked as plaintext!".format(
-                                    tx.single()[0]
+                                tx.single()[0]
                                 )
                             )
             except Exception as e:
@@ -269,7 +268,7 @@ def main():
         args.plain_text,
         args.verbose,
         args.add_password,
-        args.type,
+        args.type
     )
 
     print("All Done!")
