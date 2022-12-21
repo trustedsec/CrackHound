@@ -114,47 +114,46 @@ def update_database(compromised_users, url, username, password, plaintext, verbo
 
                     # If plaintext not specified, simply mark user as owned in BH
                     if type.upper() == "NTDS":
-                        tx = session.run("match (u:User) where u.name=\"{0}\" set u.nthash=\"{1}\"".format(
+                        tx = session.run("match (u:User) where u.name=\"{0}\" set u.nthash=\"{1}\" set u.plaintext=False set u.owned=True".format(
                                 user["username"], user["NT"]
                             )
                         )
                         if verbose:
                             print("added NT hash of {0} and marked as owned.".format(
                                user["username"]
-                               )
                             )
+                        )
+                    #this could be optional?
                     elif type == "plaintext":
                         if not plaintext:
-                            tx = session.run("match (u:User) where u.name=\"{0}\" set u.owned=True return u.name".format(
-                                user["username"]
-                                )
-                            )
                             tx = session.run(
-                                'match (u:User) where u.name="{0}" set u.owned=True set u.plaintext=True return u.name'.format(
-                                    user["username"]
+                                "match (u:User) where u.name=\"{0}\" set u.owned=True set u.plaintext=False".format(
+                                   user["username"]
                                 )
                             )
                             if verbose:
                                 print("{0} successfully marked as owned!".format(
                                    tx.single()[0]
-                                   )
                                 )
+                            )
+                    #till here?
                         elif add_password:
                             if user["password"]:
-                                tx = session.run("match (u:User) where u.name=\"{0}\" set u.plaintextpassword=\"{1}\"".format(
-                                    user["username"], user["password"]
+                                tx = session.run(
+                                    "match (u:User) where u.name=\"{0}\" set u.plaintextpassword=\"{1}\" set u.owned=True set u.plaintext=True".format(
+                                       user["username"], user["password"]
                                     )
                                 )
                                 if verbose:
                                     print("added plaintext password of {0} and marked as owned.".format(
                                        user["username"]
-                                       )
                                     )
+                                )
                             else:
                                 continue
                         else:
                             tx = session.run(
-                                "match (u:User) where u.name=\"{0}\" set u.owned=True set u.plaintext=True return u.name".format(
+                                "match (u:User) where u.name=\"{0}\" set u.owned=True set u.plaintext=True".format(
                                     user["username"]
                                 )
                             )
