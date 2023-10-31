@@ -57,6 +57,9 @@ def parse_compromised_users(file):
             if ":" in line:
                 split = line.split(":")
                 compromised_user = split[0]
+                if len(split) < 3:
+                    print(f"Your input file doesn't match the expected file format: DOMAIN.COM\\USER:NTHASH:PASS")
+                    exit()
                 user_dict["password"] = split[2]
             else:
                 compromised_user = line
@@ -105,9 +108,7 @@ def update_database(
                     # If plaintext not specified, simply mark user as owned in BH
                     if not plaintext:
                         tx = session.run(
-                            'match (u:User) where u.name="{0}" set u.owned=True return u.name'.format(
-                                user["username"]
-                            )
+                            'match (u:User) where u.name=$user set u.owned=True return u.name', user=user["username"]
                         )
                         if verbose:
                             print(
@@ -123,14 +124,10 @@ def update_database(
                     elif add_password:
                         if user["password"]:
                             tx = session.run(
-                                'match (u:User) where u.name="{0}" set u.plaintextpassword="{1}"'.format(
-                                    user["username"], user["password"]
-                                )
+                                'match (u:User) where u.name=$user set u.plaintextpassword=$password', user=user["username"], password=user["password"]
                             )
                             tx = session.run(
-                                'match (u:User) where u.name="{0}" set u.owned=True set u.plaintext=True return u.name'.format(
-                                    user["username"]
-                                )
+                                'match (u:User) where u.name=$user set u.owned=True set u.plaintext=True return u.name', user = user["username"]
                             )
                             if verbose:
                                 print(
@@ -144,9 +141,7 @@ def update_database(
                     # If nothing specified, set the user to owned and say we know the plaintext password by setting plaintext=True
                     else:
                         tx = session.run(
-                            'match (u:User) where u.name="{0}" set u.owned=True set u.plaintext=True return u.name'.format(
-                                user["username"]
-                            )
+                            'match (u:User) where u.name=$user set u.owned=True set u.plaintext=True return u.name', user=user["username"]
                         )
                         if verbose:
                             print(
